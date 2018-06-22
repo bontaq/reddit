@@ -24,12 +24,15 @@ data Thread = Thread {
   } deriving (Generic)
 instance FromJSON Thread
 
+data RData = RData {
+  children :: [Thread]
+} deriving (Generic)
+instance FromJSON RData
 
-children :: Value -> DAT.Parser [Thread]
-children = withObject "children" $ \o -> o .: "children"
-
-datum :: Value -> DAT.Parser children
-datum = withObject "data" $ \x -> x .: "data"
+data RReturn = RReturn {
+  data :: RData
+} deriving (Generic)
+instance FromJSON RReturn
 
 getHot :: W.Options -> String -> IO (W.Response LBS.ByteString)
 getHot opts subreddit = W.getWith opts ("https://oauth.reddit.com/r/" ++ subreddit ++ "/hot.json")
