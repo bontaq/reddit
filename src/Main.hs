@@ -27,7 +27,6 @@ main = do
   clientSecret <- getEnv "REDDIT_CLIENT_SECRET"
   cliendId     <- getEnv "REDDIT_CLIENT_ID"
 
-  print user
   -- token
   let opts = defaults & auth ?~ basicAuth (pack cliendId) (pack clientSecret)
   r <- postWith opts tokenUrl [ ("grant_type" :: B.ByteString) := ("password"      :: B.ByteString)
