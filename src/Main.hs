@@ -1,23 +1,38 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Main where
 
+import           GHC.Generics
 import           System.Environment     (getEnv)
 import           Control.Lens
 import           Control.Monad.IO.Class
-import           Data.Aeson             (decode)
+import           Data.Aeson
+import qualified Data.Aeson.Types       as DAT
 import           Data.Aeson.Lens        (key, _String)
 import qualified Data.ByteString        as B
 import           Data.ByteString.Char8
 import qualified Data.ByteString.Lazy   as LBS
 import           Data.Text.Encoding     (encodeUtf8)
 import           GHC.Word
-import           Network.Wreq
+import qualified Network.Wreq           as W
 
 tokenUrl = "https://www.reddit.com/api/v1/access_token"
 
-getHot :: Options -> String -> IO (Response LBS.ByteString)
-getHot opts subreddit = getWith opts ("https://oauth.reddit.com/r/" ++ subreddit ++ "/hot.json")
+data Thread = Thread {
+  permalink :: String
+  } deriving (Generic)
+instance FromJSON Thread
+
+
+children :: Value -> DAT.Parser [Thread]
+children = withObject "children" $ \o -> o .: "children"
+
+datum :: Value -> DAT.Parser children
+datum = withObject "data" $ \x -> x .: "data"
+
+getHot :: W.Options -> String -> IO (W.Response LBS.ByteString)
+getHot opts subreddit = W.getWith opts ("https://oauth.reddit.com/r/" ++ subreddit ++ "/hot.json")
 
 main :: IO ()
 main = do
@@ -28,15 +43,15 @@ main = do
   cliendId     <- getEnv "REDDIT_CLIENT_ID"
 
   -- token
-  let opts = defaults & auth ?~ basicAuth (pack cliendId) (pack clientSecret)
-  r <- postWith opts tokenUrl [ ("grant_type" :: B.ByteString) := ("password"      :: B.ByteString)
-                              , ("username"   :: B.ByteString) := ("quakquakquak"  :: B.ByteString)
-                              , ("password"   :: B.ByteString) := ((pack password) :: B.ByteString) ]
-  let token = r ^. responseBody . key "access_token" . _String
-      authOpts = defaults & auth ?~ oauth2Bearer (encodeUtf8 token)
+  let opts = W.defaults & W.auth ?~ W.basicAuth (pack cliendId) (pack clientSecret)
+  r <- W.postWith opts tokenUrl [ ("grant_type" :: B.ByteString) W.:= ("password"      :: B.ByteString)
+                              , ("username"   :: B.ByteString)   W.:= ("quakquakquak"  :: B.ByteString)
+                              , ("password"   :: B.ByteString)   W.:= ((pack password) :: B.ByteString) ]
+  let token = r ^. W.responseBody . key "access_token" . _String
+      authOpts = W.defaults & W.auth ?~ W.oauth2Bearer (encodeUtf8 token)
 
   -- do
   res <- getHot authOpts "the_donald"
-  print $ res ^. responseBody
+  print $ res ^. W.responseBody
 
   return ()
