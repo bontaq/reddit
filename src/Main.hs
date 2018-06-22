@@ -17,7 +17,7 @@ import           Network.Wreq
 tokenUrl = "https://www.reddit.com/api/v1/access_token"
 
 getHot :: Options -> String -> IO (Response LBS.ByteString)
-getHot opts subreddit = getWith opts ("https://oauth.reddit.com/r/" ++ subreddit ++ "/hot")
+getHot opts subreddit = getWith opts ("https://oauth.reddit.com/r/" ++ subreddit ++ "/hot.json")
 
 main :: IO ()
 main = do
