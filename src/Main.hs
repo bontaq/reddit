@@ -1,38 +1,34 @@
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveGeneric #-}
 
 module Main where
 
-import           GHC.Generics
-import           System.Environment     (getEnv)
 import           Control.Lens
 import           Control.Monad.IO.Class
 import           Data.Aeson
-import qualified Data.Aeson.Types       as DAT
 import           Data.Aeson.Lens        (key, _String)
+import qualified Data.Aeson.Types       as DAT
 import qualified Data.ByteString        as B
 import           Data.ByteString.Char8
 import qualified Data.ByteString.Lazy   as LBS
 import           Data.Text.Encoding     (encodeUtf8)
+import           GHC.Generics
 import           GHC.Word
 import qualified Network.Wreq           as W
+import           System.Environment     (getEnv)
 
 tokenUrl = "https://www.reddit.com/api/v1/access_token"
 
 data Thread = Thread {
-  permalink :: String
-  } deriving (Generic)
-instance FromJSON Thread
-
-data RData = RData {
-  children :: [Thread]
-} deriving (Generic)
-instance FromJSON RData
-
-data RReturn = RReturn {
-  data :: RData
-} deriving (Generic)
-instance FromJSON RReturn
+   permalinks :: [String]
+   } deriving (Generic, Show)
+instance FromJSON Thread where
+  parseJSON = withObject "data" $ \d -> do
+    ddata      <- d     .: "data" :: DAT.Parser Object
+    children   <- ddata .: "children" :: DAT.Parser [Object]
+    threads    <- mapM (\i -> i .: "data") children
+    permalinks <- mapM (\i -> i .: "permalink") threads
+    return Thread{ permalinks=permalinks }
 
 getHot :: W.Options -> String -> IO (W.Response LBS.ByteString)
 getHot opts subreddit = W.getWith opts ("https://oauth.reddit.com/r/" ++ subreddit ++ "/hot.json")
@@ -48,13 +44,15 @@ main = do
   -- token
   let opts = W.defaults & W.auth ?~ W.basicAuth (pack cliendId) (pack clientSecret)
   r <- W.postWith opts tokenUrl [ ("grant_type" :: B.ByteString) W.:= ("password"      :: B.ByteString)
-                              , ("username"   :: B.ByteString)   W.:= ("quakquakquak"  :: B.ByteString)
-                              , ("password"   :: B.ByteString)   W.:= ((pack password) :: B.ByteString) ]
+                                , ("username"   :: B.ByteString) W.:= ("quakquakquak"  :: B.ByteString)
+                                , ("password"   :: B.ByteString) W.:= ((pack password) :: B.ByteString) ]
   let token = r ^. W.responseBody . key "access_token" . _String
       authOpts = W.defaults & W.auth ?~ W.oauth2Bearer (encodeUtf8 token)
 
   -- do
   res <- getHot authOpts "the_donald"
-  print $ res ^. W.responseBody
+
+  let permalinks = eitherDecode (res ^. W.responseBody) :: Either String Thread
+  print . show $ permalinks
 
   return ()
