@@ -20,18 +20,22 @@ import           System.Environment     (getEnv)
 tokenUrl = "https://www.reddit.com/api/v1/access_token"
 
 data Thread = Thread {
-   permalinks :: [String]
+   names :: [String]
    } deriving (Generic, Show)
 instance FromJSON Thread where
   parseJSON = withObject "data" $ \d -> do
     ddata      <- d     .: "data" :: DAT.Parser Object
     children   <- ddata .: "children" :: DAT.Parser [Object]
     threads    <- mapM (\i -> i .: "data") children
-    permalinks <- mapM (\i -> i .: "permalink") threads
-    return Thread{ permalinks=permalinks }
+    names <- mapM (\i -> i .: "id") threads
+    return Thread{ names=names }
 
 getHot :: W.Options -> String -> IO (W.Response LBS.ByteString)
 getHot opts subreddit = W.getWith opts ("https://oauth.reddit.com/r/" ++ subreddit ++ "/hot.json")
+
+getComments :: W.Options -> String -> String -> IO (W.Response LBS.ByteString)
+getComments opts subreddit threadId =
+  W.getWith opts ("https://oauth.reddit.com/r/" ++ subreddit ++ "/comments/" ++ threadId)
 
 main :: IO ()
 main = do
@@ -54,5 +58,12 @@ main = do
 
   let permalinks = eitherDecode (res ^. W.responseBody) :: Either String Thread
   print . show $ permalinks
+
+  let comments = case permalinks of
+        Right (Thread (n:names)) -> do
+          res <- getComments authOpts "the_donald" n
+          return $ Data.ByteString.Char8.concat . LBS.toChunks $ res ^. W.responseBody
+        Left a                   -> return (pack a)
+  comments >>= print
 
   return ()
