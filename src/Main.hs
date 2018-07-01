@@ -49,6 +49,7 @@ instance FromJSON Comment where
     authors <- mapM (\x -> x .: "author" :: DAT.Parser String) childrenData
     return Comment { cnames=authors }
 
+-- TODO: use traversal + sequence for nested comment chains
 instance FromJSON Comments where
   parseJSON = withArray "thread" $ \arr -> do
     comments <- mapM parseJSON (V.toList arr) :: DAT.Parser [Comment]
@@ -83,16 +84,12 @@ main = do
 
   let permalinks = eitherDecode (res ^. W.responseBody) :: Either String Thread
 
-  let comments = case permalinks of
-        Right (Thread (n:names)) -> do
-          res <- getComments authOpts subreddit n
-          return $ Data.ByteString.Char8.concat . LBS.toChunks $ res ^. W.responseBody
-        Left a                   -> return (pack a)
-      test = case permalinks of
+  let commentResults = case permalinks of
+        -- TODO: map over and sequence
         Right (Thread (n:names)) -> do
           getComments authOpts subreddit n
 
-  res2 <- test
+  res2 <- commentResults
   let decoded = eitherDecode (res2 ^. W.responseBody) :: Either String Comments
 
   case decoded of
